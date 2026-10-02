@@ -1,8 +1,14 @@
 # Self-fetching installer package
 
 Builds an aarch64 RPM that, when installed, downloads R7 Documents from the
-vendor with `aria2c`, verifies its checksum, unpacks it and applies the
-adaptations — in one `rpm -Uvh`, no reboot.
+vendor, verifies its checksum, unpacks it and applies the adaptations — in one
+`rpm -Uvh`, no reboot.
+
+**One package is enough.** It carries the Aurora stand-ins itself (and so
+`Provides: libauroraapp-shim`, `Conflicts:` with the separate shim package), and
+everything else it needs — `rpm`, `cpio`, Silica, the WebView components — is
+stock Sailfish. `aria2c` is only *recommended*: it is quicker, but it lives in
+Chum, so the script falls back to `curl` when it is missing.
 
 ## Why it unpacks instead of installing
 

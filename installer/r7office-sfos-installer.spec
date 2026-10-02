@@ -1,17 +1,20 @@
 Name:       r7office-sfos-installer
-Version:    1.0.0
+Version:    1.1.0
 Release:    1
 Summary:    Fetches R7 Documents from the vendor and sets it up for Sailfish
 License:    Proprietary
 URL:        https://github.com/smatkovi/r7office-sfos
 ExclusiveArch: aarch64
 
-# For fetching and unpacking
-Requires:   aria2
+# For fetching and unpacking. aria2 is preferred but lives in Chum, so it is
+# only recommended -- the script falls back to curl, which is always present.
+Recommends: aria2
 Requires:   rpm
 Requires:   cpio
-# The stand-in for the Aurora symbols
-Requires:   libauroraapp-shim >= 1.0.0
+# The Aurora stand-ins are built into this package, so that a single RPM is
+# enough on a stock device.
+Provides:   libauroraapp-shim = 1.0.0
+Conflicts:  libauroraapp-shim
 # What R7 itself needs. These are not checked otherwise, because the vendor
 # package is unpacked rather than installed through rpm.
 Requires:   sailfishsilica-qt5 >= 0.10.9
@@ -32,12 +35,28 @@ fails inside a scriptlet. The file list is recorded so that removal stays clean.
 
 Р7-Документы belongs to АО «Р7» and is not bundled here.
 
+BuildRequires: pkgconfig(Qt5Core) pkgconfig(Qt5Gui) pkgconfig(Qt5Quick) libsailfishapp-devel
+
 %prep
 %setup -c -T
 
+%build
+g++ -std=c++11 -fPIC -shared -O2 -I/usr/include/sailfishapp \
+  $(pkg-config --cflags Qt5Core Qt5Gui Qt5Quick) \
+  -Wl,-soname,libauroraapp.so.2 -o libauroraapp.so.2 %{_sourcedir}/auroraapp.cpp \
+  -lsailfishapp $(pkg-config --libs Qt5Core Qt5Gui Qt5Quick)
+g++ -std=c++11 -fPIC -shared -O2 \
+  $(pkg-config --cflags Qt5Core) \
+  -Wl,-soname,libQt5SystemInfo.so.5 \
+  -Wl,--version-script,%{_sourcedir}/qt5systeminfo.map \
+  -o libQt5SystemInfo.so.5 %{_sourcedir}/qt5systeminfo.cpp \
+  $(pkg-config --libs Qt5Core)
+
 %install
-mkdir -p %{buildroot}%{_bindir}
+mkdir -p %{buildroot}%{_bindir} %{buildroot}%{_libdir}
 mkdir -p %{buildroot}%{_datadir}/%{name}/qml/pages %{buildroot}%{_datadir}/%{name}/icons
+install -m 0644 libauroraapp.so.2 %{buildroot}%{_libdir}/libauroraapp.so.2
+install -m 0644 libQt5SystemInfo.so.5 %{buildroot}%{_libdir}/libQt5SystemInfo.so.5
 install -m 0755 %{_sourcedir}/r7office-install %{buildroot}%{_bindir}/r7office-install
 install -m 0644 %{_sourcedir}/EditorPage.qml %{buildroot}%{_datadir}/%{name}/qml/pages/
 install -m 0644 %{_sourcedir}/FilesPage.qml  %{buildroot}%{_datadir}/%{name}/qml/pages/
@@ -83,5 +102,7 @@ fi
 exit 0
 
 %files
+%{_libdir}/libauroraapp.so.2
+%{_libdir}/libQt5SystemInfo.so.5
 %{_bindir}/r7office-install
 %{_datadir}/%{name}

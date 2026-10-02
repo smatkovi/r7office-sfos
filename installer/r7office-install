@@ -59,9 +59,15 @@ mkdir -p "$SPOOL" "$STATE"
 echo "spool: $SPOOL ($(df -Ph "$(dirname "$SPOOL")" | awk "NR==2 {print \$4}") free)"
 
 echo "== downloading =="
+# aria2c is quicker but lives in Chum, so fall back to curl, which is stock.
 if [ ! -f "$SPOOL/$PACKAGE" ] || [ "$(sha256sum "$SPOOL/$PACKAGE" | cut -d' ' -f1)" != "$SHA" ]; then
-    aria2c -x4 -s4 --summary-interval=5 --allow-overwrite=true \
-           -d "$SPOOL" -o "$PACKAGE" "$URL"
+    if command -v aria2c >/dev/null 2>&1; then
+        aria2c -x4 -s4 --summary-interval=5 --allow-overwrite=true \
+               -d "$SPOOL" -o "$PACKAGE" "$URL"
+    else
+        echo "aria2c not found, using curl"
+        curl -L --progress-bar -o "$SPOOL/$PACKAGE" "$URL"
+    fi
 fi
 
 GOT=$(sha256sum "$SPOOL/$PACKAGE" | cut -d' ' -f1)

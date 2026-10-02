@@ -113,10 +113,12 @@ working untouched.
 
 ## One-step installer
 
-`installer/` builds an aarch64 package that does all of the above by itself:
-installing it downloads R7 from the vendor with `aria2c`, verifies the
-checksum, unpacks it and applies the adaptations — one `rpm -Uvh`, no reboot.
-`rpm -e` takes it all back out again. See [installer/README.md](installer/README.md).
+`installer/` builds a single aarch64 package that does all of the above by
+itself: installing it downloads R7 from the vendor, verifies the checksum,
+unpacks it and applies the adaptations — one `rpm -Uvh`, no reboot, nothing
+else to install first. It carries the shim, and falls back to `curl` when
+`aria2c` is not around. `rpm -e` takes it all back out again.
+See [installer/README.md](installer/README.md).
 
 ## Building
 
