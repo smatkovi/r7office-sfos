@@ -4,11 +4,29 @@ Builds an aarch64 RPM that, when installed, downloads R7 Documents from the
 vendor, verifies its checksum, unpacks it and applies the adaptations — in one
 `rpm -Uvh`, no reboot.
 
-**One package is enough.** It carries the Aurora stand-ins itself (and so
-`Provides: libauroraapp-shim`, `Conflicts:` with the separate shim package), and
-everything else it needs — `rpm`, `cpio`, Silica, the WebView components — is
-stock Sailfish. `aria2c` is only *recommended*: it is quicker, but it lives in
-Chum, so the script falls back to `curl` when it is missing.
+**One package is enough, and it ships nothing belonging to R7.** The
+adaptations travel as the patch scripts from `patches/`, which are applied to
+the freshly unpacked files on the device — so the package is MIT throughout and
+can be published.
+
+It carries the Aurora stand-ins itself (hence `Provides: libauroraapp-shim` and
+`Conflicts:` with the separate shim package), and everything else it needs —
+`rpm`, `cpio`, `python3-base`, Silica, the WebView components — is stock
+Sailfish. `aria2c` is only *recommended*: it is quicker, but it lives in Chum,
+so the script falls back to `curl` when it is missing.
+
+The icon step needs Pillow, which is not on a stock device and may be installed
+only for your user rather than system-wide. The installer runs as root, so it
+skips the icon with a note when it cannot import it. To apply it afterwards:
+
+```sh
+T=$(mktemp -d)
+python3 /usr/share/r7office-sfos-installer/patches/squircle-icon.py "$T"
+for g in 86 108 128 172; do
+  sudo cp "$T/ru.r7office.documents-$g.png" \
+          /usr/share/icons/hicolor/${g}x${g}/apps/ru.r7office.documents.png
+done
+```
 
 ## Why it unpacks instead of installing
 
@@ -39,18 +57,11 @@ applies the adaptations.
 
 ## Building
 
-The package ships the patched QML, which is derived from R7's own files, so it
-is not kept in this repository. Generate it from your own installed copy:
+Everything the package needs is in this repository. Copy `r7office-install`,
+the four scripts from `../patches/`, and the shim sources from
+`../auroraapp-shim/` into `~/rpmbuild/SOURCES`, then:
 
 ```sh
-# with R7 installed and the patches applied (see the top-level README)
-mkdir -p build/qml/pages build/icons
-cp /usr/share/ru.r7office.documents/qml/pages/EditorPage.qml build/qml/pages/
-cp /usr/share/ru.r7office.documents/qml/pages/FilesPage.qml  build/qml/pages/
-python3 ../patches/squircle-icon.py build/icons
-
-# then, in the SDK container, with r7office-install, the two .qml files and
-# icons/ copied into ~/rpmbuild/SOURCES
 sb2 -t SailfishOS-5.2.0.15-aarch64 -m sdk-build \
     rpmbuild --target aarch64 -bb r7office-sfos-installer.spec
 ```

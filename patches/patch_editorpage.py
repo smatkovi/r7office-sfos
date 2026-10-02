@@ -30,8 +30,11 @@ NEW = '''            onLinkClicked: {
 
 def main():
     text = open(PATH).read()
+    if "onLinkClicked" in text:
+        print("EditorPage.qml already patched")
+        return
     if OLD not in text:
-        raise SystemExit("anchor not found -- already patched, or a different version?")
+        raise SystemExit("anchor not found -- a different version?")
     open(PATH, "w").write(text.replace(OLD, NEW))
     print("EditorPage.qml patched")
 

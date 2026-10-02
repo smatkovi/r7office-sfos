@@ -10,8 +10,11 @@ NEW = OLD + ";RemovableMedia;UDisks;Sharing;Thumbnails"
 
 def main():
     text = open(PATH).read()
+    if NEW in text:
+        print("permissions already set")
+        return
     if OLD + "\n" not in text:
-        raise SystemExit("permission line not found -- already patched?")
+        raise SystemExit("permission line not found -- a different version?")
     open(PATH, "w").write(text.replace(OLD + "\n", NEW + "\n", 1))
     print("permissions set:", NEW)
 

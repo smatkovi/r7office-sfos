@@ -22,23 +22,39 @@ TARGET=/usr/share/ru.r7office.documents
 
 adaptations() {
     echo "== adaptations =="
+    # Back the originals up first, but only while they are still pristine --
+    # otherwise an already-patched copy would become the "original".
     for f in pages/EditorPage.qml pages/FilesPage.qml; do
-        # Only back up while the file is still pristine, otherwise an
-        # already-patched copy would become the "original".
         if [ ! -f "$TARGET/qml/$f.r7orig" ] \
            && ! grep -q "onLinkClicked\|ownList" "$TARGET/qml/$f" 2>/dev/null; then
             cp -a "$TARGET/qml/$f" "$TARGET/qml/$f.r7orig"
         fi
-        cp -a "$DATA/qml/$f" "$TARGET/qml/$f"
     done
     for g in 86 108 128 172; do
         I=/usr/share/icons/hicolor/${g}x${g}/apps/ru.r7office.documents.png
         [ -f "$I.r7orig" ] || cp -a "$I" "$I.r7orig" 2>/dev/null || true
-        cp -a "$DATA/icons/ru.r7office.documents-${g}.png" "$I"
     done
     D=/usr/share/applications/ru.r7office.documents.desktop
     [ -f "$D.r7orig" ] || cp -a "$D" "$D.r7orig"
-    sed -i 's/^Permissions=Internet;MediaIndexing;UserDirs;WebView$/Permissions=Internet;MediaIndexing;UserDirs;WebView;RemovableMedia;UDisks;Sharing;Thumbnails/' "$D"
+
+    # Nothing of R7's is shipped here; the adaptations are applied to the
+    # freshly unpacked files by our own scripts. They are idempotent.
+    python3 "$DATA/patches/patch_editorpage.py"
+    python3 "$DATA/patches/patch_filespage.py"
+    python3 "$DATA/patches/patch_perms.py"
+
+    # The icon needs Pillow, which is not on every device -- skip it quietly.
+    ICONS=$(mktemp -d)
+    if python3 "$DATA/patches/squircle-icon.py" "$ICONS" >/dev/null 2>&1 \
+       && [ -f "$ICONS/ru.r7office.documents-172.png" ]; then
+        for g in 86 108 128 172; do
+            cp -a "$ICONS/ru.r7office.documents-${g}.png" \
+                  /usr/share/icons/hicolor/${g}x${g}/apps/ru.r7office.documents.png
+        done
+    else
+        echo "icon left as it is (Pillow missing)"
+    fi
+    rm -rf "$ICONS"
 }
 
 # Already installed through rpm? Then do not download anything, just adapt.

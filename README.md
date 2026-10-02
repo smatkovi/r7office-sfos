@@ -28,6 +28,18 @@ Two things to know about it:
 
 ## Installation
 
+**The short way — one package, nothing else:**
+
+```sh
+sudo rpm -Uvh r7office-sfos-installer-1.2.0-1.aarch64.rpm
+```
+
+It fetches R7 from the vendor, verifies it, unpacks it and applies everything
+below. `sudo rpm -e r7office-sfos-installer` undoes all of it. Details in
+[installer/README.md](installer/README.md).
+
+**Or by hand:**
+
 ```sh
 # 1. The shim (from this repository's releases)
 sudo rpm -Uvh libauroraapp-shim-1.0.0-1.aarch64.rpm
@@ -113,11 +125,9 @@ working untouched.
 
 ## One-step installer
 
-`installer/` builds a single aarch64 package that does all of the above by
-itself: installing it downloads R7 from the vendor, verifies the checksum,
-unpacks it and applies the adaptations — one `rpm -Uvh`, no reboot, nothing
-else to install first. It carries the shim, and falls back to `curl` when
-`aria2c` is not around. `rpm -e` takes it all back out again.
+`installer/` builds that single package. It ships nothing belonging to R7 — the
+adaptations travel as the patch scripts above and are applied on the device —
+so it is MIT throughout and published here.
 See [installer/README.md](installer/README.md).
 
 ## Building

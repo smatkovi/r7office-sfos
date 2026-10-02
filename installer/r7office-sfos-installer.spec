@@ -1,16 +1,22 @@
 Name:       r7office-sfos-installer
-Version:    1.1.0
+Version:    1.2.0
 Release:    1
 Summary:    Fetches R7 Documents from the vendor and sets it up for Sailfish
-License:    Proprietary
+License:    MIT
 URL:        https://github.com/smatkovi/r7office-sfos
 ExclusiveArch: aarch64
+
+# squircle-icon.py imports Pillow inside a try block and bows out politely when
+# it is missing, so the automatic dependency generator must not turn that into a
+# hard requirement -- Pillow is not on a stock device.
+%global __requires_exclude ^python3dist\\(pillow\\)$
 
 # For fetching and unpacking. aria2 is preferred but lives in Chum, so it is
 # only recommended -- the script falls back to curl, which is always present.
 Recommends: aria2
 Requires:   rpm
 Requires:   cpio
+Requires:   python3-base
 # The Aurora stand-ins are built into this package, so that a single RPM is
 # enough on a stock device.
 Provides:   libauroraapp-shim = 1.0.0
@@ -25,9 +31,12 @@ Requires:   qtmozembed-qt5
 Conflicts:  r7office-sfos-patch
 
 %description
-Downloads Р7-Документы (R7 Documents, Aurora OS) from the vendor with aria2c,
-verifies its checksum, unpacks the payload and lays the Sailfish adaptations on
-top -- all while this package is being installed.
+Downloads Р7-Документы (R7 Documents, Aurora OS) from the vendor, verifies its
+checksum, unpacks the payload and applies the Sailfish adaptations -- all while
+this package is being installed.
+
+Nothing belonging to R7 is shipped here. The adaptations are patch scripts that
+are applied to the freshly unpacked files on the device.
 
 The vendor package is unpacked rather than installed through rpm: the RPM
 database is locked for the duration of a transaction, so a second rpm always
@@ -54,13 +63,14 @@ g++ -std=c++11 -fPIC -shared -O2 \
 
 %install
 mkdir -p %{buildroot}%{_bindir} %{buildroot}%{_libdir}
-mkdir -p %{buildroot}%{_datadir}/%{name}/qml/pages %{buildroot}%{_datadir}/%{name}/icons
+mkdir -p %{buildroot}%{_datadir}/%{name}/patches
 install -m 0644 libauroraapp.so.2 %{buildroot}%{_libdir}/libauroraapp.so.2
 install -m 0644 libQt5SystemInfo.so.5 %{buildroot}%{_libdir}/libQt5SystemInfo.so.5
 install -m 0755 %{_sourcedir}/r7office-install %{buildroot}%{_bindir}/r7office-install
-install -m 0644 %{_sourcedir}/EditorPage.qml %{buildroot}%{_datadir}/%{name}/qml/pages/
-install -m 0644 %{_sourcedir}/FilesPage.qml  %{buildroot}%{_datadir}/%{name}/qml/pages/
-install -m 0644 %{_sourcedir}/icons/*.png    %{buildroot}%{_datadir}/%{name}/icons/
+install -m 0755 %{_sourcedir}/patch_editorpage.py %{buildroot}%{_datadir}/%{name}/patches/
+install -m 0755 %{_sourcedir}/patch_filespage.py  %{buildroot}%{_datadir}/%{name}/patches/
+install -m 0755 %{_sourcedir}/patch_perms.py      %{buildroot}%{_datadir}/%{name}/patches/
+install -m 0755 %{_sourcedir}/squircle-icon.py    %{buildroot}%{_datadir}/%{name}/patches/
 
 %post
 if %{_bindir}/r7office-install; then

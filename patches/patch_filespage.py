@@ -97,11 +97,13 @@ VIEW_NEW = "        model: ownList\n"
 
 def main():
     text = open(PATH).read()
+    if "ownList" in text:
+        print("FilesPage.qml already patched")
+        return
     for anchor, what in ((IMPORT_ANCHOR, "import"), (MODEL_ANCHOR, "model"),
                          (VIEW_ANCHOR, "list view")):
         if anchor not in text:
-            raise SystemExit("%s anchor not found -- already patched, or a "
-                             "different version?" % what)
+            raise SystemExit("%s anchor not found -- a different version?" % what)
     text = text.replace(IMPORT_ANCHOR, IMPORT_ANCHOR + IMPORT_ADDED, 1)
     text = text.replace(MODEL_ANCHOR, MODEL_NEW, 1)
     text = text.replace(VIEW_ANCHOR, VIEW_NEW, 1)
