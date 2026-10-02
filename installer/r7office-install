@@ -1,0 +1,101 @@
+#!/bin/sh
+# Fetches Р7-Документы from the vendor, unpacks it, and lays the Sailfish
+# adaptations on top.
+#
+# Why unpack instead of "rpm -i": this script runs from a %post scriptlet, and
+# the RPM database is locked for the duration of a transaction -- a second rpm
+# always fails there. So we extract the payload ourselves and remember the file
+# list, so that removal stays clean.
+set -e
+
+URL=https://download.r7-office.ru/aurora/ru.r7office.documents-1.5.5.2126-1.aarch64.rpm
+SHA=dddf2ad98605263026846068fd9175c6e647e65be7e58907d222b6cffdc76ce2
+PACKAGE=$(basename "$URL")
+# rpm2cpio on Sailfish truncates unpredictably when it writes into a pipe
+# (the same call returned 319 MB, 319 MB, then 5 MB), so the payload goes to a
+# file first. That needs room for the package plus the payload, which is why
+# the spool directory is chosen by free space -- / is often tight.
+SPOOL=/var/tmp/r7office-sfos
+DATA=/usr/share/r7office-sfos-installer
+STATE=/var/lib/r7office-sfos
+TARGET=/usr/share/ru.r7office.documents
+
+adaptations() {
+    echo "== adaptations =="
+    for f in pages/EditorPage.qml pages/FilesPage.qml; do
+        # Only back up while the file is still pristine, otherwise an
+        # already-patched copy would become the "original".
+        if [ ! -f "$TARGET/qml/$f.r7orig" ] \
+           && ! grep -q "onLinkClicked\|ownList" "$TARGET/qml/$f" 2>/dev/null; then
+            cp -a "$TARGET/qml/$f" "$TARGET/qml/$f.r7orig"
+        fi
+        cp -a "$DATA/qml/$f" "$TARGET/qml/$f"
+    done
+    for g in 86 108 128 172; do
+        I=/usr/share/icons/hicolor/${g}x${g}/apps/ru.r7office.documents.png
+        [ -f "$I.r7orig" ] || cp -a "$I" "$I.r7orig" 2>/dev/null || true
+        cp -a "$DATA/icons/ru.r7office.documents-${g}.png" "$I"
+    done
+    D=/usr/share/applications/ru.r7office.documents.desktop
+    [ -f "$D.r7orig" ] || cp -a "$D" "$D.r7orig"
+    sed -i 's/^Permissions=Internet;MediaIndexing;UserDirs;WebView$/Permissions=Internet;MediaIndexing;UserDirs;WebView;RemovableMedia;UDisks;Sharing;Thumbnails/' "$D"
+}
+
+# Already installed through rpm? Then do not download anything, just adapt.
+if rpm -q ru.r7office.documents >/dev/null 2>&1; then
+    echo "ru.r7office.documents is already installed via rpm - adapting only."
+    adaptations
+    echo "Done."
+    exit 0
+fi
+
+for candidate in /home/.r7office-sfos /var/tmp/r7office-sfos; do
+    base=$(dirname "$candidate")
+    free=$(df -Pk "$base" 2>/dev/null | awk "NR==2 {print \$4}")
+    [ -n "$free" ] || continue
+    if [ "$free" -gt 500000 ]; then SPOOL=$candidate; break; fi
+done
+mkdir -p "$SPOOL" "$STATE"
+echo "spool: $SPOOL ($(df -Ph "$(dirname "$SPOOL")" | awk "NR==2 {print \$4}") free)"
+
+echo "== downloading =="
+if [ ! -f "$SPOOL/$PACKAGE" ] || [ "$(sha256sum "$SPOOL/$PACKAGE" | cut -d' ' -f1)" != "$SHA" ]; then
+    aria2c -x4 -s4 --summary-interval=5 --allow-overwrite=true \
+           -d "$SPOOL" -o "$PACKAGE" "$URL"
+fi
+
+GOT=$(sha256sum "$SPOOL/$PACKAGE" | cut -d' ' -f1)
+if [ "$GOT" != "$SHA" ]; then
+    echo "checksum mismatch ($GOT) - aborting." >&2
+    exit 1
+fi
+
+echo "== unpacking =="
+# The package header carries a wrong payload checksum while the payload itself
+# is intact, which is the other reason this uses rpm2cpio rather than rpm.
+rpm -qpl "$SPOOL/$PACKAGE" 2>/dev/null > "$STATE/files.list"
+EXPECTED=$(wc -l < "$STATE/files.list")
+
+# Never pipe rpm2cpio -- see the note above. Write it out, then extract.
+rpm2cpio "$SPOOL/$PACKAGE" > "$SPOOL/payload.cpio"
+rm -f "$SPOOL/$PACKAGE"
+( cd / && cpio -idmu --quiet < "$SPOOL/payload.cpio" )
+rm -f "$SPOOL/payload.cpio"
+
+# Count what actually landed; a short payload would otherwise pass silently.
+PRESENT=0
+while read -r f; do
+    [ -e "$f" ] && PRESENT=$((PRESENT + 1))
+done < "$STATE/files.list"
+echo "$PRESENT of $EXPECTED files unpacked."
+if [ "$PRESENT" -lt "$EXPECTED" ]; then
+    echo "payload incomplete - aborting." >&2
+    exit 1
+fi
+
+adaptations
+
+echo "== cleaning up =="
+rmdir "$SPOOL" 2>/dev/null || true
+echo
+echo "Done. The new icon appears after the device is restarted."

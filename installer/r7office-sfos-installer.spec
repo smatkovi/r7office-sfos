@@ -1,0 +1,87 @@
+Name:       r7office-sfos-installer
+Version:    1.0.0
+Release:    1
+Summary:    Fetches R7 Documents from the vendor and sets it up for Sailfish
+License:    Proprietary
+URL:        https://github.com/smatkovi/r7office-sfos
+ExclusiveArch: aarch64
+
+# For fetching and unpacking
+Requires:   aria2
+Requires:   rpm
+Requires:   cpio
+# The stand-in for the Aurora symbols
+Requires:   libauroraapp-shim >= 1.0.0
+# What R7 itself needs. These are not checked otherwise, because the vendor
+# package is unpacked rather than installed through rpm.
+Requires:   sailfishsilica-qt5 >= 0.10.9
+Requires:   sailfish-components-webview-qt5
+Requires:   sailfish-components-webview-qt5-pickers
+Requires:   sailfish-components-webview-qt5-popups
+Requires:   qtmozembed-qt5
+Conflicts:  r7office-sfos-patch
+
+%description
+Downloads Р7-Документы (R7 Documents, Aurora OS) from the vendor with aria2c,
+verifies its checksum, unpacks the payload and lays the Sailfish adaptations on
+top -- all while this package is being installed.
+
+The vendor package is unpacked rather than installed through rpm: the RPM
+database is locked for the duration of a transaction, so a second rpm always
+fails inside a scriptlet. The file list is recorded so that removal stays clean.
+
+Р7-Документы belongs to АО «Р7» and is not bundled here.
+
+%prep
+%setup -c -T
+
+%install
+mkdir -p %{buildroot}%{_bindir}
+mkdir -p %{buildroot}%{_datadir}/%{name}/qml/pages %{buildroot}%{_datadir}/%{name}/icons
+install -m 0755 %{_sourcedir}/r7office-install %{buildroot}%{_bindir}/r7office-install
+install -m 0644 %{_sourcedir}/EditorPage.qml %{buildroot}%{_datadir}/%{name}/qml/pages/
+install -m 0644 %{_sourcedir}/FilesPage.qml  %{buildroot}%{_datadir}/%{name}/qml/pages/
+install -m 0644 %{_sourcedir}/icons/*.png    %{buildroot}%{_datadir}/%{name}/icons/
+
+%post
+if %{_bindir}/r7office-install; then
+    :
+else
+    echo "" >&2
+    echo "Setup failed (no network?). Finish it later with:" >&2
+    echo "    sudo r7office-install" >&2
+fi
+exit 0
+
+%postun
+if [ $1 -eq 0 ]; then
+    TARGET=/usr/share/ru.r7office.documents
+    # Undo the adaptations
+    for f in pages/EditorPage.qml pages/FilesPage.qml; do
+        [ -f "$TARGET/qml/$f.r7orig" ] && mv -f "$TARGET/qml/$f.r7orig" "$TARGET/qml/$f"
+    done
+    for g in 86 108 128 172; do
+        I=/usr/share/icons/hicolor/${g}x${g}/apps/ru.r7office.documents.png
+        [ -f "$I.r7orig" ] && mv -f "$I.r7orig" "$I"
+    done
+    D=/usr/share/applications/ru.r7office.documents.desktop
+    [ -f "$D.r7orig" ] && mv -f "$D.r7orig" "$D"
+    # Remove the unpacked vendor payload again -- but only when it is not
+    # actually installed through rpm.
+    if ! rpm -q ru.r7office.documents >/dev/null 2>&1; then
+        if [ -f /var/lib/r7office-sfos/files.list ]; then
+            while read -r f; do
+                [ -f "$f" ] && rm -f "$f"
+            done < /var/lib/r7office-sfos/files.list
+            sort -r /var/lib/r7office-sfos/files.list | while read -r f; do
+                rmdir "$(dirname "$f")" 2>/dev/null || true
+            done
+        fi
+    fi
+    rm -rf /var/lib/r7office-sfos /var/tmp/r7office-sfos
+fi
+exit 0
+
+%files
+%{_bindir}/r7office-install
+%{_datadir}/%{name}

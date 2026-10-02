@@ -111,6 +111,13 @@ working untouched.
   (purely additive — the sandbox stays on).
 * Icons cut to the Sailfish silhouette.
 
+## One-step installer
+
+`installer/` builds an aarch64 package that does all of the above by itself:
+installing it downloads R7 from the vendor with `aria2c`, verifies the
+checksum, unpacks it and applies the adaptations — one `rpm -Uvh`, no reboot.
+`rpm -e` takes it all back out again. See [installer/README.md](installer/README.md).
+
 ## Building
 
 ```sh
